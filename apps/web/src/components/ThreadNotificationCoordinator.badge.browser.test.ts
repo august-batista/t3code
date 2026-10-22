@@ -1,6 +1,6 @@
 import { WORKING_EXIT_GRACE_MS } from "@t3tools/client-runtime/state/thread-inbox";
 import type { AnyRouter } from "@tanstack/react-router";
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 import { Atom, AtomRegistry } from "effect/reactivity";
@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
   sound: vi.fn(),
   badge: vi.fn(),
   settingsListeners: new Set<() => void>(),
+  muted: [] as string[],
 }));
 vi.mock(import("./ui/toast"), async (original) => {
   const actual = await original();
@@ -67,6 +68,7 @@ vi.mock(import("../hooks/useSettings"), async (original) => ({
   getClientSettings: (() => ({
     notificationMode: state.mode,
     inAppNotificationsEnabled: state.inApp,
+    mutedThreadKeys: state.muted,
   })) as never,
 }));
 vi.mock(import("../threadNotifications"), async (original) => ({
@@ -76,6 +78,7 @@ vi.mock(import("../threadNotifications"), async (original) => ({
   setNotificationBadge: state.badge,
 }));
 
+import { threadNotificationTag } from "../threadNotifications";
 import { startThreadNotifications } from "./ThreadNotificationCoordinator";
 
 let registry: AtomRegistry.AtomRegistry;
@@ -190,6 +193,7 @@ function setup() {
   state.mode = "notifications";
   state.inApp = false;
   state.settingsListeners.clear();
+  state.muted = [];
   registry.set(environmentIdsAtom, ["one", "two"]);
   state.shells.set("one", shell());
   state.shells.set("two", shell());
@@ -330,3 +334,22 @@ it.each([false, true])(
     );
   },
 );
+
+it("keeps a muted thread silent and does not replay its alert after unmuting", async () => {
+  await using app = setup();
+  state.mode = "notifications-and-sound";
+  state.muted = ["one:thread"];
+  app.start();
+  state.shells.set("one", shell({ hasPendingApprovals: true }));
+  state.shells.set("two", shell({ hasPendingApprovals: true }));
+  expect(TestNotification.sent.map((notification) => notification.tag)).toEqual([
+    threadNotificationTag(EnvironmentId.make("two"), ThreadId.make("thread")),
+  ]);
+  expect(state.sound).toHaveBeenCalledTimes(1);
+
+  state.muted = [];
+  app.changeSettings();
+  state.shells.set("one", shell({ hasPendingApprovals: true }));
+  expect(TestNotification.sent).toHaveLength(1);
+  expect(state.sound).toHaveBeenCalledTimes(1);
+});

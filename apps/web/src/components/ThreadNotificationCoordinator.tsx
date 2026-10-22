@@ -29,6 +29,7 @@ import {
   threadNotificationTag,
   unlockNotificationAudio,
 } from "../threadNotifications";
+import { isThreadMuted } from "../threadMute";
 import { resolveSidebarThreadStatus, type SidebarThreadStatus } from "./Sidebar.logic";
 import {
   createThreadNotificationGate,
@@ -80,7 +81,9 @@ export function startThreadNotifications(
     kind: ThreadNotificationKind,
   ) => {
     const { thread, status } = state;
-    const { notificationMode: mode, inAppNotificationsEnabled } = getClientSettings();
+    const settings = getClientSettings();
+    if (isThreadMuted(settings, thread)) return;
+    const { notificationMode: mode, inAppNotificationsEnabled } = settings;
     const active = (router.state.matches.at(-1)?.params ?? {}) as {
       environmentId?: string;
       threadId?: string;

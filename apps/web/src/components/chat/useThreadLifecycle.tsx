@@ -41,6 +41,8 @@ import {
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
 import { useUiStateStore } from "../../uiStateStore";
+import { getClientSettings } from "../../hooks/useSettings";
+import { isThreadMuted, setThreadMuted } from "../../threadMute";
 import { type ChatMessage } from "../../types";
 import { AlarmClockIcon, CheckCircle2Icon } from "lucide-react";
 import { stackedThreadToast, toastManager } from "../ui/toast";
@@ -639,6 +641,20 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
         toastThreadActionFailure(
           activeThreadPinned ? "Failed to unpin thread" : "Failed to pin thread",
         ),
+      );
+    },
+    "thread.mute": () => {
+      if (!activeThreadShell || !activeThreadRef) return;
+      const muted = !isThreadMuted(getClientSettings(), activeThreadShell);
+      void setThreadMuted(activeThreadRef, muted);
+      toastManager.add(
+        stackedThreadToast({
+          type: "info",
+          title: muted ? "Thread muted" : "Thread unmuted",
+          description: muted
+            ? "No notifications from this thread on this device."
+            : "Notifications from this thread are back on.",
+        }),
       );
     },
   } satisfies ChatShortcutCommands;

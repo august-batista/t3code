@@ -11,6 +11,7 @@ const baseState: ThreadActionMenuState = {
   autoSettleEnabled: true,
   isSnoozed: false,
   canSnoozeNow: true,
+  isMuted: false,
   isRegeneratingTitle: false,
   isRunning: false,
   supports: {
@@ -35,6 +36,7 @@ describe("buildThreadActionMenuItems", () => {
         isPinned: reversed,
         isSettled: reversed,
         isSnoozed: reversed,
+        isMuted: reversed,
       });
       const expected = reversed
         ? [

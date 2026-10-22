@@ -323,3 +323,14 @@ several selected threads together. Choose **Wake thread** to bring a thread back
 A snoozed thread keeps working and stays hidden until its wake time, even while
 its agent wakes itself for background work. It comes back early only when it needs
 an approval or answer from you, when a run fails, or when you send it a message.
+
+## Mute a thread
+
+Mute a thread that runs on its own, such as a recurring worker, when you want it to keep going
+without interrupting you. On web and desktop, choose **Mute thread** from its menu or press
+`Mod+Shift+U` in the thread. A muted thread sends no notifications, sounds, or toasts, never
+shows as unread, and stays below your other threads in its section. A bell icon marks it; click
+the icon or choose **Unmute thread** to turn notifications back on.
+
+Mute applies only to the browser or desktop app where you set it. Mobile push notifications and
+your other devices are unaffected.

@@ -131,7 +131,12 @@ import { useTerminalFocus } from "../hooks/useTerminalFocus";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { registerSettleAndAdvance } from "../settleAndAdvance";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
-import { useBoringSidebarEnabled, useClientSettings } from "../hooks/useSettings";
+import {
+  getClientSettings,
+  useBoringSidebarEnabled,
+  useClientSettings,
+} from "../hooks/useSettings";
+import { isThreadMuted, setThreadMuted } from "../threadMute";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
@@ -2603,6 +2608,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               autoSettleEnabled: thread.autoSettleDisabledAt == null,
               isSnoozed,
               canSnoozeNow: canSnooze(thread, { now: new Date().toISOString() }),
+              isMuted: isThreadMuted(getClientSettings(), thread),
               isRegeneratingTitle,
               isRunning: !threadRuntimeCanArchive(thread.runtime),
               canShareWithGuest: appAtomRegistry.get(
@@ -2682,6 +2688,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             return;
           case "unsnooze":
             attemptUnsnooze(threadRef);
+            return;
+          case "mute":
+          case "unmute":
+            await setThreadMuted(threadRef, clicked.value === "mute");
             return;
           case "pin":
             attemptPin(threadRef);

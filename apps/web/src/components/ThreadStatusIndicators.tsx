@@ -20,6 +20,7 @@ import { FolderGit2Icon, TerminalIcon } from "lucide-react";
 import { useEnvironment, usePrimaryEnvironmentId } from "../state/environments";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useProject } from "../state/entities";
+import { useThreadMuted } from "../threadMute";
 import {
   pullRequestListLines,
   resolveThreadCurrentPullRequestLink,
@@ -698,12 +699,14 @@ export function ThreadRowLeadingStatus({ thread }: { thread: SidebarThreadSummar
   };
   const pr = resolveDisplayedThreadPr(displayedPrInput);
   const prStatus = prStatusIndicator(pr, resolveDisplayedThreadPrProvider(displayedPrInput));
-  const threadStatus = resolveThreadStatusPill({
+  const isMuted = useThreadMuted(threadRef);
+  const threadStatusPill = resolveThreadStatusPill({
     thread: {
       ...thread,
       lastVisitedAt,
     },
   });
+  const threadStatus = isMuted && threadStatusPill?.label === "Completed" ? null : threadStatusPill;
 
   const supportsMultiplePullRequests = useSupportsMultiplePullRequests(thread.environmentId);
   const pendingLink =

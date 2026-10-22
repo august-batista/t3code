@@ -44,7 +44,8 @@ import { buildPhysicalToLogicalProjectKeyMap } from "../sidebarProjectGrouping";
 import { threadRuntimeCanArchive } from "@t3tools/client-runtime/state/models";
 import { useCopyToClipboard } from "./useCopyToClipboard";
 import { useNewThreadHandler } from "./useHandleNewThread";
-import { useClientSettings } from "./useSettings";
+import { isThreadMuted, setThreadMuted } from "../threadMute";
+import { getClientSettings, useClientSettings } from "./useSettings";
 import { canTurnThreadIntoProject, useThreadActions } from "./useThreadActions";
 
 function failureToast(title: string, error: unknown) {
@@ -142,6 +143,7 @@ export function useThreadActionMenu(input: {
         autoSettleEnabled: thread.autoSettleDisabledAt == null,
         isSnoozed: supports.snooze && effectiveSnoozed(thread, { now: now.toISOString() }),
         canSnoozeNow: canSnooze(thread, { now: now.toISOString() }),
+        isMuted: isThreadMuted(getClientSettings(), thread),
         isRegeneratingTitle,
         isRunning: !threadRuntimeCanArchive(thread.runtime),
         supports,
@@ -229,6 +231,10 @@ export function useThreadActionMenu(input: {
           return;
         case "unsnooze":
           await reportFailure("Failed to wake thread", () => unsnoozeThread(threadRef));
+          return;
+        case "mute":
+        case "unmute":
+          await setThreadMuted(threadRef, action === "mute");
           return;
         case "pin":
           await reportFailure("Failed to pin thread", () => pinThread(threadRef));

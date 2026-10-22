@@ -489,6 +489,11 @@ export const ClientSettingsSchema = Schema.Struct({
   // the boring sidebar; the boring sidebar toggle clears it.
   legacySidebarEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   sidebarWorkingShelfEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  // Scoped thread keys (`environmentId:threadId`). Device-local on purpose: muting
+  // silences this client only and never touches the environment's thread state.
+  mutedThreadKeys: Schema.Array(TrimmedNonEmptyString).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   sidebarProjectGroupingMode: SidebarProjectGroupingMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_PROJECT_GROUPING_MODE)),
   ),
@@ -1779,6 +1784,7 @@ export const ClientSettingsPatch = Schema.Struct({
   threadDetailsItems: Schema.optionalKey(Schema.Record(Schema.String, Schema.Boolean)),
   legacySidebarEnabled: Schema.optionalKey(Schema.Boolean),
   sidebarWorkingShelfEnabled: Schema.optionalKey(Schema.Boolean),
+  mutedThreadKeys: Schema.optionalKey(Schema.Array(TrimmedNonEmptyString)),
   sidebarProjectGroupingMode: Schema.optionalKey(SidebarProjectGroupingMode),
   sidebarProjectGroupingOverrides: Schema.optionalKey(
     Schema.Record(TrimmedNonEmptyString, SidebarProjectGroupingMode),

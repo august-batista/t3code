@@ -17,6 +17,8 @@ export type ThreadActionMenuId =
   | "snooze"
   | `snooze:${string}`
   | "unsnooze"
+  | "mute"
+  | "unmute"
   | "rename"
   | "regenerate-title"
   | "mark-unread"
@@ -80,6 +82,7 @@ export interface ThreadActionMenuState {
   readonly autoSettleEnabled: boolean;
   readonly isSnoozed: boolean;
   readonly canSnoozeNow: boolean;
+  readonly isMuted: boolean;
   readonly isRegeneratingTitle: boolean;
   /** Archive rejects attached providers, so disable it while running. */
   readonly isRunning: boolean;
@@ -97,7 +100,7 @@ export interface ThreadActionMenuState {
   readonly canTurnIntoProject?: boolean;
 }
 
-/** Local navigation, read markers, and copying remain available to read-only clients. */
+/** Local navigation, read markers, muting, and copying remain available to read-only clients. */
 export function threadActionRequiresOperate(action: ThreadActionMenuId): boolean {
   return ![
     "find",
@@ -105,6 +108,8 @@ export function threadActionRequiresOperate(action: ThreadActionMenuId): boolean
     "project-settings",
     "mark-unread",
     "share-guest",
+    "mute",
+    "unmute",
     "copy",
     "copy-path",
     "copy-branch",
@@ -166,6 +171,9 @@ export function buildThreadActionMenuItems(
               },
         ]
       : []),
+    state.isMuted
+      ? { id: "unmute", label: "Unmute thread", icon: "bell" }
+      : { id: "mute", label: "Mute thread", icon: "bell-off" },
     { id: "rename", label: "Rename thread", icon: "pencil", separatorBefore: true },
     ...(state.supports.titleRegeneration
       ? [

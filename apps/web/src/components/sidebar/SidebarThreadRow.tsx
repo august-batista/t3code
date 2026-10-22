@@ -37,6 +37,7 @@ import {
   CircleCheckIcon,
   CircleDashedIcon,
   CircleDotDashedIcon,
+  BellOffIcon,
   ClockIcon,
   GitBranchIcon,
   MessageCircleQuestionIcon,
@@ -62,6 +63,7 @@ import {
 import { useRightPanelStore } from "../../rightPanelStore";
 import { useOpenPrLink } from "../../lib/openPullRequestLink";
 import { useUiStateStore } from "../../uiStateStore";
+import { setThreadMuted, useThreadMuted } from "../../threadMute";
 import { useThreadSelectionStore } from "../../threadSelectionStore";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { useNowSecond } from "../../hooks/useNowSecond";
@@ -705,7 +707,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     ? resolveThreadCurrentPullRequestLink(thread.pullRequests)
     : null;
 
-  const isUnread = hasUnseenCompletion({ ...thread, lastVisitedAt });
+  const isMuted = useThreadMuted(threadRef);
+  const isUnread = !isMuted && hasUnseenCompletion({ ...thread, lastVisitedAt });
   const status = resolveSidebarThreadStatus(thread);
   const lastVisitedDate = lastVisitedAt === undefined ? null : parseTimestampDate(lastVisitedAt);
   const wokeAtDate = props.wokeAt === null ? null : parseTimestampDate(props.wokeAt);
@@ -1121,6 +1124,28 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       />
     )
   ) : null;
+  const handleUnmuteClick = (event: ReactMouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    void setThreadMuted(threadRef, false);
+  };
+  const mutedIndicator = isMuted ? (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label="Unmute thread"
+            onClick={handleUnmuteClick}
+            className="inline-flex cursor-pointer items-center rounded-sm text-muted-foreground/65 outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          />
+        }
+      >
+        <BellOffIcon aria-hidden className="size-3 shrink-0" />
+      </TooltipTrigger>
+      <TooltipPopup>Muted on this device. Click to unmute.</TooltipPopup>
+    </Tooltip>
+  ) : null;
 
   const remoteMachineIcon =
     isRemote && !showsScratchMachine ? (
@@ -1249,6 +1274,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               {title}
               {multiline ? titleLineIcons : null}
               {pinIndicator}
+              {mutedIndicator}
               {multiline ? null : terminalStatusIcon}
               {isRegeneratingTitle ? (
                 <span role="status" className="sr-only">
@@ -1432,6 +1458,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               {/* Left of the status slot, the pin would slide when hover swaps the
                 label for the wider row controls. */}
               {pinIndicator}
+              {mutedIndicator}
               {props.projectDisplayName ? (
                 <span
                   className={cn("min-w-0 flex-1 truncate font-normal text-secondary-label text-xs")}

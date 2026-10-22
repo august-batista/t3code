@@ -111,6 +111,7 @@ vi.mock("./useHandleNewThread", () => ({
   useNewThreadHandler: () => async () => recordEffect("draft"),
 }));
 vi.mock("./useSettings", () => ({
+  getClientSettings: () => ({ mutedThreadKeys: [] }),
   useClientSettings: (select: (settings: unknown) => unknown) =>
     select({
       confirmThreadDelete: true,
