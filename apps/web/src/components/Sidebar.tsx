@@ -136,7 +136,7 @@ import {
   useBoringSidebarEnabled,
   useClientSettings,
 } from "../hooks/useSettings";
-import { isThreadMuted, setThreadMuted } from "../threadMute";
+import { isThreadMuted, setThreadMuted, useMutedThreadKeys } from "../threadMute";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
@@ -330,6 +330,7 @@ const SETTLED_TAIL_INITIAL_COUNT = 10;
 const SETTLED_TAIL_PAGE_COUNT = 25;
 const SETTLED_SHELF_EXPANDED_KEY = "t3code:sidebar:settled-expanded";
 const SNOOZED_SHELF_EXPANDED_KEY = "t3code:sidebar:snoozed-expanded";
+const MUTED_SHELF_EXPANDED_KEY = "t3code:sidebar:muted-expanded";
 const WORKING_SHELF_EXPANDED_KEY = "t3code:sidebar:working-expanded";
 
 const inboxReturns = createInboxReturnTracker();
@@ -356,6 +357,7 @@ interface SidebarThreadPartitionInput {
   readonly workingShelfEnabled: boolean;
   /** Boring mode: folders list active threads by the user's latest message. */
   readonly sortActiveBySend: boolean;
+  readonly mutedThreadKeys: ReadonlyArray<string>;
   // Snooze wakes, the queued-turn grace and the Working shelf's exit grace depend
   // on the clock, so the minute tick, the precise snooze-wake tick and the inbox
   // tracker's expiry version are inputs: a new key repartitions.
@@ -437,6 +439,7 @@ function useSidebarThreads(input: {
   // Folders already separate the work, so boring mode has no Working shelf.
   const workingShelfEnabled =
     useClientSettings((s) => s.sidebarWorkingShelfEnabled) && folderGroups === null;
+  const mutedThreadKeys = useMutedThreadKeys();
   const inboxReturnsVersion = useSyncExternalStore(
     inboxReturns.subscribe,
     inboxReturns.getSnapshot,
@@ -451,6 +454,11 @@ function useSidebarThreads(input: {
   );
   const [snoozedShelfExpanded, setSnoozedShelfExpanded] = useLocalStorage(
     SNOOZED_SHELF_EXPANDED_KEY,
+    false,
+    Schema.Boolean,
+  );
+  const [mutedShelfExpanded, setMutedShelfExpanded] = useLocalStorage(
+    MUTED_SHELF_EXPANDED_KEY,
     false,
     Schema.Boolean,
   );
@@ -481,11 +489,18 @@ function useSidebarThreads(input: {
     optimisticDrop,
     workingShelfEnabled,
     sortActiveBySend: folderGroups !== null,
+    mutedThreadKeys,
     clockKey: `${nowMinute}:${snoozeWakeClock}:${inboxReturnsVersion}`,
   });
 
-  const { pinnedThreads, activeThreads, workingThreads, snoozedThreads, settledThreads } =
-    partition;
+  const {
+    pinnedThreads,
+    activeThreads,
+    workingThreads,
+    mutedThreads,
+    snoozedThreads,
+    settledThreads,
+  } = partition;
   // Older settled threads load in pages; the shelf lists them only as far as they are loaded.
   const olderSettledShelf = useOlderSettledShelf({
     scopes: olderSettledScopes([...serverConfigs.keys()], scopedProjectKeys),
@@ -538,12 +553,16 @@ function useSidebarThreads(input: {
               : EMPTY_THREADS,
           };
         });
+  const visibleMutedThreads = mutedShelfExpanded
+    ? mutedThreads
+    : routeThreadOnly(mutedThreads, routeRowThreadKey);
   const orderedThreads = [
     ...pinnedThreads,
     ...(projectFolders === null
       ? activeThreads
       : projectFolders.flatMap((folder) => folder.threads)),
     ...visibleWorkingThreads,
+    ...visibleMutedThreads,
     ...visibleSnoozedThreads,
     ...renderedSettledThreads,
   ];
@@ -552,6 +571,7 @@ function useSidebarThreads(input: {
     [pinnedThreads, "pinned"],
     [activeThreads, "active"],
     [workingThreads, "working"],
+    [mutedThreads, "muted"],
     [snoozedThreads, "snoozed"],
     [settledThreads, "settled"],
   ] as const) {
@@ -565,6 +585,7 @@ function useSidebarThreads(input: {
       ...pinnedThreads,
       ...activeThreads,
       ...workingThreads,
+      ...mutedThreads,
       ...snoozedThreads,
       ...settledThreads,
     ],
@@ -581,6 +602,8 @@ function useSidebarThreads(input: {
     toggleSettledShelf: () => setSettledShelfExpanded((value) => !value),
     snoozedShelfExpanded,
     toggleSnoozedShelf: () => setSnoozedShelfExpanded((value) => !value),
+    mutedShelfExpanded,
+    toggleMutedShelf: () => setMutedShelfExpanded((value) => !value),
     workingShelfExpanded,
     toggleWorkingShelf: () => setWorkingShelfExpanded((value) => !value),
     projectFolders,
@@ -591,10 +614,12 @@ function useSidebarThreads(input: {
     renderedSettledThreads,
     visibleSnoozedThreads,
     visibleWorkingThreads,
+    visibleMutedThreads,
     orderedThreadKeys: orderedThreads.map(threadShellKey),
     threadByKey: new Map(orderedThreads.map((thread) => [threadShellKey(thread), thread] as const)),
     settledThreadKeys: new Set(settledThreads.map(threadShellKey)),
     snoozedThreadKeys: new Set(snoozedThreads.map(threadShellKey)),
+    mutedShelfThreadKeys: new Set(mutedThreads.map(threadShellKey)),
     sectionByThreadKey,
     pinnedKeys: pinnedThreads.map(threadShellKey),
     activeKeys: activeThreads.map(threadShellKey),
@@ -616,6 +641,7 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
     optimisticDrop,
     workingShelfEnabled,
     sortActiveBySend,
+    mutedThreadKeys,
   } = input;
   const preciseNow = new Date().toISOString();
   const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys, delegatedUnderParent);
@@ -628,6 +654,8 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
     (manuallyMoved ? isThreadWorking(thread) : inboxObservation.isWorking(thread))
       ? working
       : active;
+  const muted: EnvironmentThreadShell[] = [];
+  const mutedKeys = new Set(mutedThreadKeys);
   const snoozed: EnvironmentThreadShell[] = [];
   const settled: EnvironmentThreadShell[] = [];
   const { draggableThreadKeys, activeReorderableThreadKeys } = resolveSidebarReorderableThreadKeys({
@@ -660,6 +688,7 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
         snoozed: configLoaded && effectiveSnoozed(thread, { now: preciseNow }),
         settled: configLoaded && thread.settledOverride === "settled",
         pinned: thread.pinnedAt != null,
+        muted: mutedKeys.has(threadKey),
       });
       (section === "snoozed"
         ? snoozed
@@ -667,7 +696,9 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
           ? settled
           : section === "pinned"
             ? pinned
-            : inbox(thread)
+            : section === "muted"
+              ? muted
+              : inbox(thread)
       ).push(thread);
     }
   }
@@ -698,6 +729,7 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
             getId: (thread) => scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
           }),
     workingThreads: sortWorkingThreadsBySend(working),
+    mutedThreads: sortThreadsForSidebar(muted),
     snoozedThreads: snoozed.toSorted(
       (left, right) =>
         firstValidTimestampMs(left.snoozedUntil ?? null) -
@@ -1289,6 +1321,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     activeReorderableThreadKeys,
     activeThreads,
     workingThreads,
+    mutedThreads,
     snoozedThreads,
     settledThreads,
     snoozeNow,
@@ -1302,6 +1335,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     toggleSettledShelf,
     snoozedShelfExpanded,
     toggleSnoozedShelf,
+    mutedShelfExpanded,
+    toggleMutedShelf,
     workingShelfExpanded,
     toggleWorkingShelf,
     projectFolders,
@@ -1309,10 +1344,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     renderedSettledThreads,
     visibleSnoozedThreads,
     visibleWorkingThreads,
+    visibleMutedThreads,
     orderedThreadKeys,
     threadByKey,
     settledThreadKeys,
     snoozedThreadKeys,
+    mutedShelfThreadKeys,
     sectionByThreadKey,
     pinnedKeys,
     activeKeys,
@@ -1415,6 +1452,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const threadByKeyRef = useRef(threadByKey);
   const settledThreadKeysRef = useRef(settledThreadKeys);
   const snoozedThreadKeysRef = useRef(snoozedThreadKeys);
+  const mutedShelfThreadKeysRef = useRef(mutedShelfThreadKeys);
 
   const jumpLabelByKey = (() => {
     const mapping = new Map<string, string>();
@@ -1576,12 +1614,17 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     const orderedKeys = orderedThreadKeysRef.current;
     const settledKeys = settledThreadKeysRef.current;
     const snoozedKeys = snoozedThreadKeysRef.current;
+    const mutedKeys = mutedShelfThreadKeysRef.current;
     const currentIndex = orderedKeys.indexOf(threadKey);
     const nextCardKey =
       currentIndex === -1
         ? null
         : ([...orderedKeys.slice(currentIndex + 1), ...orderedKeys.slice(0, currentIndex)].find(
-            (key) => !settledKeys.has(key) && !snoozedKeys.has(key) && !coParkingKeys?.has(key),
+            (key) =>
+              !settledKeys.has(key) &&
+              !snoozedKeys.has(key) &&
+              !mutedKeys.has(key) &&
+              !coParkingKeys?.has(key),
           ) ?? null);
     const nextThread = nextCardKey ? threadByKeyRef.current.get(nextCardKey) : null;
     return nextThread
@@ -1700,7 +1743,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     };
   };
 
-  const isContextDrag = dragState?.contextDrag === true || dragState?.activeSection === "working";
+  // Working and muted rows can supply chat context, but never preview sidebar movement.
+  const isContextDrag =
+    dragState?.contextDrag === true ||
+    dragState?.activeSection === "working" ||
+    dragState?.activeSection === "muted";
   const dragTargetSection = isContextDrag ? null : (dragState?.targetSection ?? null);
   const finishThreadDrag = (started: boolean) => {
     dragSensorRef.current = null;
@@ -1770,6 +1817,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     threadByKeyRef.current = threadByKey;
     settledThreadKeysRef.current = settledThreadKeys;
     snoozedThreadKeysRef.current = snoozedThreadKeys;
+    mutedShelfThreadKeysRef.current = mutedShelfThreadKeys;
     sectionByThreadKeyRef.current = sectionByThreadKey;
   });
   const startActionSweep = useStableCallback(
@@ -1911,6 +1959,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       pinnedThreads.length +
         activeThreads.length +
         workingThreads.length +
+        mutedThreads.length +
         snoozedThreads.length +
         settledCount ===
         0
@@ -1927,6 +1976,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     if (workingThreads.length > 0) {
       items.push({ kind: "marker", marker: "working-header" });
       items.push(...rowsOf(visibleWorkingThreads, "working"));
+    }
+    if (mutedThreads.length > 0) {
+      items.push({ kind: "marker", marker: "muted-header" });
+      items.push(...rowsOf(visibleMutedThreads, "muted"));
     }
     if (snoozedThreads.length > 0) {
       items.push({ kind: "marker", marker: "snoozed-header" });
@@ -3492,12 +3545,29 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               />,
                             );
                             break;
+                          case "muted-header":
+                            items.push(
+                              <SidebarSectionHeader
+                                key="muted-shelf-header"
+                                marker="muted-header"
+                                className={cn(workingThreads.length === 0 && "mt-auto")}
+                                label="Muted"
+                                count={mutedThreads.length}
+                                toggle={{
+                                  expanded: mutedShelfExpanded,
+                                  onToggle: toggleMutedShelf,
+                                }}
+                              />,
+                            );
+                            break;
                           case "snoozed-header":
                             items.push(
                               <SidebarSectionHeader
                                 key="snoozed-shelf-header"
                                 marker="snoozed-header"
-                                className={cn(workingThreads.length === 0 && "mt-auto")}
+                                className={cn(
+                                  workingThreads.length + mutedThreads.length === 0 && "mt-auto",
+                                )}
                                 label="Snoozed"
                                 count={snoozedThreads.length}
                                 toggle={{
@@ -3513,7 +3583,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                 key="settled-shelf-header"
                                 marker="settled-header"
                                 className={cn(
-                                  workingThreads.length + snoozedThreads.length === 0 && "mt-auto",
+                                  workingThreads.length +
+                                    mutedThreads.length +
+                                    snoozedThreads.length ===
+                                    0 && "mt-auto",
                                 )}
                                 label="Settled"
                                 count={settledCount}

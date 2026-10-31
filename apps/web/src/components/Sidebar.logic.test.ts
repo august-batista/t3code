@@ -21,6 +21,7 @@ import {
   resolveWorkingStartedAt,
   searchSidebarThreads,
   shouldRecedeSidebarThread,
+  resolveSidebarThreadSection,
   sortInboxThreadsByReturn,
   resolveSidebarDropTarget,
   planSidebarThreadDrop,
@@ -232,6 +233,25 @@ function makeLatestRun(overrides?: {
       overrides?.completedAt !== undefined ? overrides.completedAt : "2026-03-09T10:05:00.000Z",
   };
 }
+
+describe("resolveSidebarThreadSection", () => {
+  const unplaced = { snoozed: false, settled: false, pinned: false, muted: false };
+
+  it("files a muted thread on the Muted shelf instead of the inbox", () => {
+    expect(resolveSidebarThreadSection(unplaced)).toBe("active");
+    expect(resolveSidebarThreadSection({ ...unplaced, muted: true })).toBe("muted");
+  });
+
+  it("keeps pinned, snoozed, and settled placements ahead of mute", () => {
+    expect(resolveSidebarThreadSection({ ...unplaced, muted: true, pinned: true })).toBe("pinned");
+    expect(resolveSidebarThreadSection({ ...unplaced, muted: true, snoozed: true })).toBe(
+      "snoozed",
+    );
+    expect(resolveSidebarThreadSection({ ...unplaced, muted: true, settled: true })).toBe(
+      "settled",
+    );
+  });
+});
 
 describe("orderItemsByPreferredIds", () => {
   it("resolves legacy preference aliases without materializing project state", () => {
@@ -1195,6 +1215,37 @@ describe("Working shelf (beta)", () => {
         ).toEqual({ kind: "none" });
       },
     );
+
+    it("never drops into the Muted shelf, and never moves a muted row out of it", () => {
+      const withMuted = [
+        ...items.slice(0, -2),
+        marker("muted-header"),
+        row("m1", "muted"),
+        ...items.slice(-2),
+      ];
+      expect(resolveSidebarDropTarget(withMuted, "a1", "m1")).toBeNull();
+      expect(resolveSidebarDropTarget(withMuted, "p1", "a2")?.activeOrder).toEqual([
+        "a1",
+        "a2",
+        "p1",
+      ]);
+      for (const overKey of ["p1", "a2", "s1"]) {
+        const target = resolveSidebarDropTarget(withMuted, "m1", overKey);
+        expect(resolveSidebarDropVerb("muted", target?.section ?? null)).toBeNull();
+        expect(
+          planSidebarThreadDrop({
+            activeKey: "m1",
+            activeSection: "muted",
+            target: target!,
+            pinnedOrder: ["p1"],
+            pinnedKeysById: new Map([["p1", "m"]]),
+            activeOrder: ["a1", "a2"],
+            activeKeysById: new Map(),
+            activeTimeOrdered: true,
+          }),
+        ).toEqual({ kind: "none" });
+      }
+    });
 
     it("arranges the rows it can write when another row's server cannot store an order", () => {
       const plan = planSidebarThreadDrop({

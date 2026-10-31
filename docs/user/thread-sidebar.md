@@ -329,8 +329,9 @@ an approval or answer from you, when a run fails, or when you send it a message.
 Mute a thread that runs on its own, such as a recurring worker, when you want it to keep going
 without interrupting you. On web and desktop, choose **Mute thread** from its menu or press
 `Mod+Shift+U` in the thread. A muted thread sends no notifications, sounds, or toasts, never
-shows as unread, and stays below your other threads in its section. A bell icon marks it; click
-the icon or choose **Unmute thread** to turn notifications back on.
+shows as unread, and moves to a collapsible **Muted** shelf so it stays out of your inbox. Pinned,
+snoozed, and settled threads stay where they are. A bell icon marks a muted thread; click the icon
+or choose **Unmute thread** to turn notifications back on and return it to the inbox.
 
 Mute applies only to the browser or desktop app where you set it. Mobile push notifications and
 your other devices are unaffected.

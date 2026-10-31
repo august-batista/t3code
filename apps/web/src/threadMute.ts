@@ -22,6 +22,10 @@ export function useThreadMuted(ref: ScopedThreadRef | null): boolean {
   );
 }
 
+export function useMutedThreadKeys(): ClientSettings["mutedThreadKeys"] {
+  return useClientSettings((settings) => settings.mutedThreadKeys);
+}
+
 export function setThreadMuted(ref: ScopedThreadRef, muted: boolean): Promise<ClientSettings> {
   const key = scopedThreadKey(ref);
   return persistClientSettingsUpdate((current) => {
